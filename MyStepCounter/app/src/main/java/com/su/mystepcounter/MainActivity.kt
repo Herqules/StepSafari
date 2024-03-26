@@ -36,23 +36,27 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
         binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        //check if permission isn't already granted, request the permission
-        if (isPermissionGranted()) {
-            requestPermission()
-        }
-
-        //initializing sensorManager instance
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-
-
-        binding.bottomNav.setOnItemSelectedListener{ item ->
-            Toast.makeText(this, "Achievements Clicked", Toast.LENGTH_SHORT).show()
-            onOptionsItemSelected(item)
+        // Initialize the bottom navigation view listener
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.achievement -> {
+                    // Navigate to AchievementsActivity
+                    startActivity(Intent(this, AchievementsActivity::class.java))
+                    true
+                }
+                R.id.settings -> {
+                    // Navigate to Settings Activity
+                    startActivity(Intent(this, Settings::class.java))
+                    true
+                }
+                else -> false
+            }
         }
     }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         val id = item.itemId
         if(id == R.id.home){
