@@ -5,8 +5,11 @@ StepSafari is an innovative mobile application developed using Kotlin and Androi
 
 ## Features
 Interactive Challenges: Engage in various animal-themed fitness challenges to suit different workout intensities.
+
 Achievement Tracking: Earn achievements as you complete challenges, motivating continued progress and activity.
+
 Progress Monitoring: Keep track of your daily steps and challenge progress with built-in tracking features.
+
 Step Tracking:Monitor your steps throughout the day, whether you're actively participating in a challenge or simply moving about.
 
 ## User Interface
