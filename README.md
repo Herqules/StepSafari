@@ -1,7 +1,7 @@
 # StepSafari: A Gamified Approach to Health and Fitness
 
 ## Introduction
-StepSafari is an innovative mobile application developed using Kotlin and Android Studio, designed to enhance physical activity through gamification. The app utilizes built-in pedometer sensors to track steps, offer interactive challenges, and monitor user progress over time, making exercise both fun and engaging.
+StepSafari is an innovative mobile application developed using Kotlin and Android Studio, designed to enhance physical activity through gamification. The app utilizes built-in android sensors like the pedometer to track steps, offer interactive challenges, and monitor user progress over time, making exercise both fun and engaging via animal themes and a game-like UI.
 
 ## Getting Started
 To set up the StepSafari project on your local environment, follow these steps:
