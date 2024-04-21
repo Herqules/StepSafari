@@ -13,18 +13,18 @@ To set up the StepSafari project on your local environment, follow these steps:
 - Make project, build, then run.
 
 
-**Features**
+## Features
 Interactive Challenges: Engage in various animal-themed fitness challenges to suit different workout intensities.
 Achievement Tracking: Earn achievements as you complete challenges, motivating continued progress and activity.
 Progress Monitoring: Keep track of your daily steps and challenge progress with built-in tracking features.
 Step Tracking:Monitor your steps throughout the day, whether you're actively participating in a challenge or simply moving about.
 
-**User Interface**
+## User Interface
 The user interface of StepSafari is divided into three main pages:
 
 Challenge Page: Discover and select from a variety of fitness challenges.
 Achievements Page: View all completed challenges and the achievements earned.
 Possibilities Screen: Explore current and future challenges, assessing which are unlocked or in progress.
 
-**Future Enhancements**
+## Future Enhancements
 Next steps focus on plans to integrate heart rate monitoring and BMI calculations to tailor challenges more closely to individual fitness levels. This integration will enable more personalized workouts, optimizing health benefits by aligning them with user-specific fitness metrics.
