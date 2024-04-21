@@ -16,7 +16,9 @@ Step Tracking:Monitor your steps throughout the day, whether you're actively par
 The user interface of StepSafari is divided into three main pages:
 
 Challenge Page: Discover and select from a variety of fitness challenges.
+
 Achievements Page: View all completed challenges and the achievements earned.
+
 Possibilities Screen: Explore current and future challenges, assessing which are unlocked or in progress.
 
 ## Future Enhancements
