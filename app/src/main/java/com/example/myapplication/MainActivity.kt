@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -23,21 +25,34 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.delay
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.OnMapReadyCallback
+import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.LatLng
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 class MainActivity : ComponentActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var stepSensor: Sensor? = null
     private var totalSteps = mutableStateOf(0f)
-    private var stepsOffset = 0F // Used to offset steps to 0 at the beginning of challenge
-    private var stepsrawdata = 0F // Raw data read from step counter sensor
+    private var stepsOffset = 0F
+    private var stepsrawdata = 0F
 
     private val chromeColor = Color(android.graphics.Color.parseColor("#f9edd2"))
     private val safariColor = Color(android.graphics.Color.parseColor("#ecb604"))
@@ -47,24 +62,97 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
     private var currentScreen = mutableStateOf("Activity") // Current Screen
     private var activityState = mutableStateOf("Select") // Select VS Running
+    private var popup = mutableStateOf("None")
 
     private var selectedChallenge = 0
+    private var timetaken = mutableStateOf(0f)
 
-    // Challenges Values: Name [Picture in future], steps, speed, time, Unlocked?
-    private val challenges = listOf(
-        listOf("Tiger challenge", 4, 8, 12, false),
-        listOf("Bear challenge", 12, 8, 4, true),
-        listOf("Puma challenge", 12, 7, 4, false),
-        listOf("Parrot challenge", 4, 8, 12, false),
-        listOf("Dog challenge", 12, 8, 4, true),
-        listOf("Monkey challenge", 12, 7, 4, true),
-        listOf("Owl challenge", 4, 8, 12, false),
-        listOf("Beaver challenge", 12, 8, 4, true),
-        listOf("Rabbit challenge", 12, 7, 4, true)
+    private var ticks = 0
+
+    private var challenges = listOf(
+        listOf(R.drawable.tiger, 6, 8, 3, true),
+        listOf(R.drawable.bear, 8, 3, 8, true),
+        listOf(R.drawable.puma, 5, 7, 4, true),
+        listOf(R.drawable.parrot, 4, 5, 6, true),
+        listOf(R.drawable.dog, 5, 5, 5, true),
+        listOf(R.drawable.monkey, 6, 4, 4, true),
+        listOf(R.drawable.owl, 3, 6, 6, true),
+        listOf(R.drawable.beaver, 8, 4, 8, true),
+        listOf(R.drawable.rabbit, 6, 8, 2, true)
     )
+
+    private var challengelocks = mutableListOf(
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+    )
+
+    fun updateChallengeLocksEntry(entrynum: Int, value: Boolean) {
+        challengelocks[entrynum] = value
+        saveChallengeLocks()
+        updateChallengeLocks()
+    }
+
+    fun saveChallengeLocks() {
+        val sharedPreferences = getSharedPreferences("StepSafariPrefs", MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+
+        val lockString = challengelocks.joinToString(separator = ",") { it.toString() }
+
+        editor.putString("ChallengeLocks", lockString)
+        editor.apply()
+    }
+
+    fun loadChallengeLocks() {
+        Log.d("MainActivity", "Starting to load challenge locks")
+        val sharedPreferences = getSharedPreferences("StepSafariPrefs", MODE_PRIVATE)
+
+        val lockString = sharedPreferences.getString("ChallengeLocks", "")
+        Log.d("MainActivity", "Retrieved lock string from SharedPreferences: '$lockString'")
+
+        if (!lockString.isNullOrEmpty()) {
+            challengelocks = lockString.split(",").map {
+                try {
+                    it.toBoolean()
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Error parsing boolean value from string: $it", e)
+                    true
+                }
+            }.toMutableList()
+            Log.d("MainActivity", "Converted lockString to challengelocks: $challengelocks")
+
+            updateChallengeLocks()
+        } else {
+            Log.d("MainActivity", "No lock string found, using default values")
+        }
+    }
+
+    fun updateChallengeLocks() {
+        Log.d("MainActivity", "Starting to update challenge locks")
+        if (challenges.size == challengelocks.size) {
+            challenges = challenges.mapIndexed { index, challenge ->
+                challenge.dropLast(1) + challengelocks[index]
+            }
+            Log.d("MainActivity", "Updated challenges list with new lock statuses: $challenges")
+        } else {
+            Log.e("MainActivity", "The size of challenges does not match the size of challengelocks")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        loadChallengeLocks()
+
+        updateChallengeLocks()
+        //saveChallengeLocks()
+
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
@@ -72,7 +160,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         if (stepSensor != null) {
             sensorManager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_UI)
         } else {
-            // Handle case where the step counter sensor is not available
         }
 
         setContent {
@@ -86,6 +173,68 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             }
         }
     }
+
+
+
+
+
+
+
+    @Composable
+    fun ComposeMapView() {
+        val mapView = rememberMapViewWithLifecycle()
+
+        AndroidView({ mapView }) { mapView ->
+            mapView.getMapAsync { googleMap ->
+                val sydney = LatLng(-34.0, 151.0)
+                googleMap.addMarker(
+                    MarkerOptions()
+                        .position(sydney)
+                        .title("Marker in Sydney")
+                )
+                googleMap.moveCamera(CameraUpdateFactory.newLatLng(sydney))
+            }
+        }
+    }
+
+    @Composable
+    fun rememberMapViewWithLifecycle(): MapView {
+        val context = LocalContext.current
+        val mapView = remember {
+            MapView(context).apply {
+                onCreate(null)
+                onResume()
+                getMapAsync(OnMapReadyCallback { googleMap ->
+                    googleMap.setMapType(GoogleMap.MAP_TYPE_NORMAL)
+                })
+            }
+        }
+
+        val lifecycle = LocalLifecycleOwner.current.lifecycle
+        DisposableEffect(lifecycle) {
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_CREATE -> mapView.onCreate(null)
+                    Lifecycle.Event.ON_START -> mapView.onStart()
+                    Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                    Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                    Lifecycle.Event.ON_STOP -> mapView.onStop()
+                    Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                    else -> throw IllegalStateException()
+                }
+            }
+            lifecycle.addObserver(observer)
+            onDispose {
+                lifecycle.removeObserver(observer)
+            }
+        }
+
+        return mapView
+    }
+
+
+
+
 
     @Composable
     fun MainLayout() {
@@ -117,7 +266,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     fun TitleBar() {
         Box(modifier = Modifier
                 .fillMaxWidth()
-                //.shadow(elevation = 10.dp)
                 .background(
                     color = chromeColor,
                     shape = RoundedCornerShape(
@@ -159,8 +307,10 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                     .padding(8.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // Button for "Activity"
-                IconButton(onClick = { currentScreen.value = "Activity" }) {
+                IconButton(onClick = {
+                    currentScreen.value = "Activity"
+                    popup.value = "None"
+                }) {
                     Icon(
                         painter = painterResource(id = R.drawable.stopwatch),
                         contentDescription = "Activity",
@@ -168,8 +318,8 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                         tint = if (currentScreen.value == "Activity") safariAccentColor else safariColor
                     )
                 }
-                // Button for "Achievements"
-                IconButton(onClick = { currentScreen.value = "Achievements" }) {
+                IconButton(onClick = {
+                    currentScreen.value = "Achievements"}) {
                     Icon(
                         painter = painterResource(id = R.drawable.trophy),
                         contentDescription = "Achievements",
@@ -177,7 +327,6 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                         tint = if (currentScreen.value == "Achievements") safariAccentColor else safariColor
                     )
                 }
-                // Button for "Possibilities"
                 IconButton(onClick = { currentScreen.value = "Possibilities" }) {
                     Icon(
                         painter = painterResource(id = R.drawable.binoc),
@@ -192,9 +341,24 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
     @Composable
     fun SelectScreen() {
-        var selectedIndex by remember { mutableStateOf(0) } // Default to the first index
+        var selectedIndex by remember { mutableStateOf(0) }
 
-        Column(modifier = Modifier.padding(16.dp)) {
+
+
+        Column(modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
+            if(popup.value == "Fail"){
+                Text(text = "Too slow! Try again!", style = MaterialTheme.typography.headlineMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            if(popup.value == "Win"){
+                Text(text = "Congrats!", style = MaterialTheme.typography.headlineMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
@@ -235,7 +399,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .width(230.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = safariColor) // Correct parameter for background color
+                colors = ButtonDefaults.buttonColors(containerColor = safariColor)
             ) {
                 Text("Select")
             }
@@ -245,16 +409,80 @@ class MainActivity : ComponentActivity(), SensorEventListener {
 
     @Composable
     fun ActivityScreen() {
-        Column(modifier = Modifier.padding(16.dp)) {
+        val ticker = remember { mutableStateOf(0) }
+        ticks = 0
+        val speed = remember { mutableStateOf(0) }
+        val avgspeed = remember { mutableStateOf((challenges[selectedChallenge][2] as Int).toFloat()) }
+        val avgavgspeed = remember { mutableStateOf((challenges[selectedChallenge][2] as Int).toFloat()) }
+        var laststeps = remember { mutableStateOf(totalSteps.value.toInt()) }
+
+        val amountUnder = remember { mutableStateOf(0f) }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(333)
+                ticker.value = (ticker.value + 1) % Int.MAX_VALUE
+                timetaken.value += 0.05f
+                ticks += 1
+
+                speed.value = ((totalSteps.value.toInt() - laststeps.value) / ticks) * 10
+                laststeps.value = totalSteps.value.toInt()
+
+                avgspeed.value = (speed.value + (avgspeed.value * 4)) / 5
+                avgavgspeed.value = (avgspeed.value + (avgavgspeed.value * 4)) / 5
+
+                amountUnder.value += (avgavgspeed.value - (challenges[selectedChallenge][2] as Int).toFloat())
+
+                if(amountUnder.value < -10f){
+                    popup.value = "Fail"
+                    activityState.value = "Select"
+
+                }
+
+                if((timetaken.value > challenges[selectedChallenge][3] as Int) && (totalSteps.value.toFloat() / 10) > challenges[selectedChallenge][1] as Int){
+                    updateChallengeLocksEntry(selectedChallenge, false)
+                    popup.value = "Win"
+                    activityState.value = "Select"
+                }
+
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
+
+            Challenge(challengeDetails = challenges[selectedChallenge], (totalSteps.value.toFloat() / 10), avgavgspeed.value, timetaken.value)
+
+            /**
+            Spacer(modifier = Modifier.height(120.dp))
             Text(text = "Steps taken: ${totalSteps.value.toInt()}", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(8.dp))
+
             Button(onClick = { totalSteps.value += 1 }) {
                 Text("Increment Steps")
             }
-            Challenge(challengeDetails = challenges[selectedChallenge])
-            Button(onClick = { activityState.value = "Select" }) {
+
+
+            Button(onClick = {
+                updateChallengeLocksEntry(selectedChallenge, false)
+                saveChallengeLocks()
+            }) {
+                Text("Win challenge")
+            }
+
+            Button(onClick = {
+                activityState.value = "Select"
+            }) {
                 Text("End Attempt")
             }
+            */
+            ComposeMapView()
         }
     }
 
@@ -313,49 +541,101 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     }
 
     @Composable
-    fun Challenge(challengeDetails: List<Any>) {
-        val challengeName = challengeDetails[0] as String
-        val maxProgress = 12  // Assuming 12 is the maximum value for progress bars for visual scaling
+    fun Challenge(
+        challengeDetails: List<Any>,
+        mark1: Float? = null,
+        mark2: Float? = null,
+        mark3: Float? = null
+    ) {
+        val maxProgress = 12
 
         Box(
             modifier = Modifier
-                .background(if (challengeDetails[4] as Boolean && currentScreen.value == "Possibilities") deadCard else chromeColor, shape = RoundedCornerShape(16.dp))
+                .background(
+                    if (challengeDetails[4] as Boolean && currentScreen.value == "Possibilities")
+                        deadCard
+                    else
+                        chromeColor,
+                    shape = RoundedCornerShape(16.dp)
+                )
                 .width(230.dp)
-                .height(100.dp)
+                .height(160.dp)
                 .padding(8.dp),
             contentAlignment = Alignment.Center
         ) {
             Column {
-                Text(text = challengeName, style = MaterialTheme.typography.bodyMedium, color = safariColor)
+                Image(
+                    painter = painterResource(id = challengeDetails[0] as Int),
+                    contentDescription = "Challenge Image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    contentScale = ContentScale.Crop
+                )
                 Spacer(modifier = Modifier.height(4.dp))
-                challengeDetails.drop(1).dropLast(1).forEach {
+                challengeDetails.drop(1).dropLast(1).forEachIndexed { index, it ->
                     val progress = it as Int
-                    ProgressBar(progress, maxProgress, safariColor)
+                    val mark = when (index) {
+                        0 -> mark1
+                        1 -> mark2
+                        2 -> mark3
+                        else -> null
+                    }
+                    val iconId = when (index) {
+                        0 -> R.drawable.shoe
+                        1 -> R.drawable.speed
+                        2 -> R.drawable.stopwatch
+                        else -> 0
+                    }
+                    ProgressBar(progress, maxProgress, safariColor, mark, iconId)
                 }
             }
         }
     }
 
     @Composable
-    fun ProgressBar(progress: Int, maxProgress: Int, color: Color) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .background(safariDarkColor)
-        ) {
+    fun ProgressBar(
+        progress: Int,
+        maxProgress: Int,
+        color: Color,
+        mark: Float? = null,
+        iconId: Int
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (iconId != 0) {
+                Icon(
+                    painter = painterResource(id = iconId),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Box(
                 modifier = Modifier
-                    .background(color)
+                    .fillMaxWidth()
                     .height(8.dp)
-                    .width((230.dp * progress / maxProgress))  // Calculating width based on progress
-            )
+                    .background(safariDarkColor)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(color)
+                        .height(8.dp)
+                        .width((230.dp * progress / maxProgress))
+                )
+                mark?.let {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .offset(x = (230.dp * it / maxProgress - 4.dp), y = 0.dp)
+                            .size(8.dp)
+                            .background(safariAccentColor)
+                    )
+                }
+            }
         }
-        Spacer(modifier = Modifier.height(4.dp))  // Spacing between each progress bar
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        // Implement logic if needed to handle sensor accuracy changes
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
